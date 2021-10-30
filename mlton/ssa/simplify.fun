@@ -12,6 +12,7 @@ struct
 
 open S
 
+structure OurFlatten = OurFlatten (S)
 structure CommonArg = CommonArg (S)
 structure CommonBlock = CommonBlock (S)
 structure CommonSubexp = CommonSubexp (S)
@@ -44,6 +45,7 @@ type pass = {name: string,
              execute: bool}
 
 val ssaPassesDefault =
+   {name = "ourflatten", doit = OurFlatten.transform, execute = true} ::
    {name = "removeUnused1", doit = RemoveUnused.transform, execute = true} ::
    {name = "introduceLoops1", doit = IntroduceLoops.transform, execute = true} ::
    {name = "loopInvariant1", doit = LoopInvariant.transform, execute = true} ::
@@ -228,6 +230,7 @@ local
                  ("contify", Contify.transform),
                  ("duplicateGlobals", DuplicateGlobals.transform),
                  ("flatten", Flatten.transform),
+                 ("ourflatten", OurFlatten.transform),
                  ("introduceLoops", IntroduceLoops.transform),
                  ("knownCase", KnownCase.transform),
                  ("localFlatten", LocalFlatten.transform),

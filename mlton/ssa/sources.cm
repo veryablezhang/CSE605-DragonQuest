@@ -63,6 +63,7 @@ constant-propagation.fun
 contify.fun
 deep-flatten.fun
 duplicate-globals.fun
+our-flatten.fun
 flatten.fun
 inline.sig
 inline.fun
