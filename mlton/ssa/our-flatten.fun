@@ -4,9 +4,10 @@ struct
 open S
 open Exp Transfer
 
+
 fun transform (Program.T {globals, datatypes, functions, main}) =
    let
-      val _ = print("test our flatten\n")
+      val _ = print("Our flatten starts\n")
       val shrink = shrinkFunction {globals = globals}
       val functions =
          List.revMap
@@ -15,6 +16,13 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
              val _ = print("Function\n")
+             fun flat (x: Var.t): unit =
+                
+                
+                
+             fun forces (xs: Var.t vector): unit =
+                Vector.foreach (xs, flat)
+             val _ = forces args
              fun visit (Block.T {statements, transfer, ...}): unit -> unit =
                 let
                    val _ = print("Block\n")
@@ -22,24 +30,38 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                       Vector.foreach
                       (statements, fn Statement.T {var, exp, ...} =>
                        case exp of
-                          ConApp {args, ...} => print("ConApp")
-                        | PrimApp {args, ...} => print("PrimApp")
-                        | Tuple args => print("Tuple")
-                        | Var x => print("Var")
-                        | _ => print("Null"))
+                          ConApp {args, ...} => ()
+                        | PrimApp {args, ...} => ()
+                        | Tuple args => ()
+                        | Var x => ()
+                        | _ => ())
                    val _ =
                       case transfer of
-                         Bug => print("Bug")
-                       | Call {args, return, ...} => print("Call")
-                       | Case {cases, default, ...} => print("Case")
-                       | Goto {dst, args} => print("Goto")
-                       | Raise xs => print("Raise")
-                       | Return xs => print("Return")
-                       | Runtime {args, return, ...} => print("Runtime")
+                         Bug => ()
+                       | Call {args, return, ...} => ()
+                       | Case {cases, default, ...} => ()
+                       | Goto {dst, args} => ()
+                       | Raise xs => ()
+                       | Return xs => ()
+                       | Runtime {args, return, ...} => ()
                 in
                    fn () => ()
                 end
              val _ = Function.dfs (f, visit)
+             val blocks =
+                Vector.map
+                (blocks, fn Block.T {label, args, statements, transfer} =>
+                 let
+                    
+                    
+                    
+                    
+                 in
+                    Block.T {label = label,
+                             args = args,
+                             statements = statements,
+                             transfer = transfer}
+                 end)
           in
              shrink (Function.new {args = args,
                                    blocks = blocks,
