@@ -44,65 +44,56 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
 
              fun foo (t: exp): unit = 
                
-             (* Not exactly sure the def of Var... *)
-             fun flat (xs: (Var.t * Type.t)): unit =
-               case #2 xs of
+
+             fun flat (xs: Var.t ): unit =
+               case xs of
                   Tuple => 
                      (* flat x, add new vars into record. *)
-                     foo x
-
-                     
+                     foo xs   
                   
              (* for a in args *)      
              fun forces (xs: (Var.t * Type.t) vector): unit =
-                Vector.foreach (xs, fn a => flat #1 a)
-
-            val _ = print (Var.Layout (#1 xs))
-
-             val _ = forces args
-
-             fun visit (Block.T {statements, transfer, ...}): unit -> unit =
                 let
-                   val _ = print("Block\n")
-                   val _ = 
+                  fun newL xs acc=
+                     case xs of 
+                        hd ::tl => newL tl (case #2 hd of
+                                          | Tuple => flat #2 hd :: acc
+                                          | _ => hd ::acc ) 
+                        | [] -> List.rev acc
+                in 
+                   newL xs []
+
+             val _ = print (Var.Layout (#1 xs))
+             val newArgs = forces args
+
+             fun visit (Block.T {args, statements, transfer, ...}): unit -> unit =
+                let
+                   val newA = forces args
+                   val newS = 
                       Vector.foreach
                       (statements, fn Statement.T {var, exp, ...} =>
                        case exp of
-                          ConApp {args, ...} => ()
-                        | PrimApp {args, ...} => ()
-                        | Tuple args => () (* do something here. *)
-                        | Var x => ()
-                        | _ => ())
+                          ConApp {args, ...} => ConApp {forces args, ...}
+                        | PrimApp {args, ...} => PrimApp {forces args, ...}
+                        | Tuple args => forces args (* not sure*)
+                        | _ => exp)
                    val newT =
                       case transfer of
-                         Bug => ()
-                       | Call {args, return, ...} => Call{foo  args, return, ...}
-                       | Case {cases, default, ...} => ()
-                       | Goto {dst, args} => ()
-                       | Raise xs => ()
-                       | Return xs => ()
-                       | Runtime {args, return, ...} => ()
+                         Call {args, ...} => Call{forces args, ...}
+                       | Goto {dst, args} => Goto {dst, forces args}
+                       | Runtime {args, ...} => Runtime {forces args, ...}
+                       | _ => transfer
                 in
-                   fn () => ()
+                   Block.T {label = label,
+                             args = newA,
+                             statements = newS,
+                             transfer = newT}
                 end
-             val _ = Function.dfs (f, visit)
-             val blocks =
-                Vector.map
-                (blocks, fn Block.T {label, args, statements, transfer} =>
-                 let
-                    
-                    
-                    
-                    
-                 in
-                    Block.T {label = label,
-                             args = args,
-                             statements = statements,
-                             transfer = transfer}
-                 end)
+             val _ = Function.dfs (f, visit) (* Could the return value be the new blocks? *)
+             val newBlocks = Vector.map (blocks,visit)
           in
-             shrink (Function.new {args = args,
-                                   blocks = blocks,
+             shrink (Function.new {args = newArgs,
+                                   blocks = newBlocks,
                                    mayInline = mayInline,
                                    name = name,
                                    raises = raises,
