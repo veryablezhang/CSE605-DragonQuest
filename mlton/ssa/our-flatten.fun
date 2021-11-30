@@ -51,14 +51,26 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                      (* flat x, add new vars into record. *)
                      foo xs   
                   
-             (* for a in args *)      
+             (* for a in args *)
+
+             fun force (xs: Var.t vector): unit =
+                let
+                   fun newL xs acc=
+                      case xs of 
+                          hd ::tl => newL tl (case hd of
+                                           | Tuple => flat #1 hd :: acc
+                                           | _ => hd ::acc ) 
+                        | [] -> List.rev acc
+                in 
+                   newL xs []
+
              fun forces (xs: (Var.t * Type.t) vector): unit =
                 let
-                  fun newL xs acc=
-                     case xs of 
-                        hd ::tl => newL tl (case #2 hd of
-                                          | Tuple => flat #2 hd :: acc
-                                          | _ => hd ::acc ) 
+                   fun newL xs acc=
+                      case xs of 
+                          hd ::tl => newL tl (case #2 hd of
+                                           | Tuple => flat #1 hd ::acc
+                                           | _ => hd ::acc ) 
                         | [] -> List.rev acc
                 in 
                    newL xs []
@@ -73,15 +85,16 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                       Vector.foreach
                       (statements, fn Statement.T {var, exp, ...} =>
                        case exp of
-                          ConApp {args, ...} => ConApp {forces args, ...}
-                        | PrimApp {args, ...} => PrimApp {forces args, ...}
-                        | Tuple args => forces args (* not sure*)
+                          ConApp {args, ...} => ConApp {force args, ...}
+                        | PrimApp {args, ...} => PrimApp {force args, ...}
+                        | Select {tuple, offset} => replace tuple offest
+                        | Tuple args => force args (* not sure*)
                         | _ => exp)
                    val newT =
                       case transfer of
-                         Call {args, ...} => Call{forces args, ...}
-                       | Goto {dst, args} => Goto {dst, forces args}
-                       | Runtime {args, ...} => Runtime {forces args, ...}
+                         Call {args, ...} => Call{force args, ...}
+                       | Goto {dst, args} => Goto {dst, force args}
+                       | Runtime {args, ...} => Runtime {force args, ...}
                        | _ => transfer
                 in
                    Block.T {label = label,
