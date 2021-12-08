@@ -19,8 +19,8 @@ open Exp Transfer
             Therefore anytime we see #2 bar later we can just sub it w/ foo.
             May has a scope problem...
       *)
-      datatype t = T of {val name: Var.t,
-                         val elements: (Var.t * Type.t) list}
+      datatype t = T of {name: Var.t,
+                         elements: (Var.t * Type.t) list}
       end
    
 
@@ -36,7 +36,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
          List.revMap
          (functions, fn f =>
           let
-             val {argss, blocks, mayInline, name, raises, returns, start} =
+             val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
              val _ = print f.layout
             
@@ -44,23 +44,28 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
 
              fun getElements(x: Var.t) = 
                 (*return the elements in a recorded tuple*)
-                getE (List.nth List.index(!record fn Flatters.T{name, ...} => name = x)) 
+                getE (List.nth (List.index(!record (fn Flatters.T{name, ...} => name = x)))) 
                 
              (* fun foo (x: Var.t, t: Type.t): (Var.t * Type.t) =  *)
 
              fun flat (x: Var.t * Type.t): (Var.t * Type.t) list =    
                 let 
-                   fun checkType (ts: Type.t vector) acc = 
-                      case Vector.toList ts of 
-                         hd ::tl => checkType tl (case hd of
-                                          | Tuple => (checkType hd [])@acc
-                                          | _ => ((Var.newNoname(), hd)::acc ))
+                   fun checkType (ts: Type.t list) acc = 
+                      case ts of 
+                         hd ::tl => checkType tl (if Type.isTuple hd then
+                                            	        (checkType (Vector.toList (Type.deTuple hd)) [])@acc
+                                                  else ((Var.newNoname(), hd)::acc ))
                        | [] => acc
-                   if List.exists (!record, fn Flatters.T {name, ...} => name = #1 x) then
-                      val flattened = getElements #1 x
-                   else
-                      val flattened = checkType #2 x []
-                      record:= List.append(Flatters.T{name = #1 x, elements = flattened})
+                   val flattened = 
+                   	if List.exists (!record, fn Flatters.T {name, ...} => name = #1 x) then
+                      	    getElements (#1 x)
+                       else
+                           checkType (Vector.toList (Type.deTuple (#2 x))) []
+                   val _ = 
+                      if List.exists (!record, fn Flatters.T {name, ...} => name = #1 x) then
+                      	    ()
+                       else
+                           record:= List.append(!record Flatters.T{name = (#1 x), elements = flattened})
                 in
                    flattened
                 end
@@ -69,25 +74,25 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                 let
                    fun newL ls acc =
                       case ls of
-                          hd ::tl => newL tl (case #2 hd of
-                                           | Tuple => hd :: ((flat hd)@acc)
-                                           | _ => hd ::acc )
+                          hd ::tl => newL tl (if Type.isTuple (#2 hd) then
+                                                  hd :: ((flat hd)@acc)
+                                              else hd ::acc )
                         | [] => List.rev acc
                 in 
-                   Vector.fromList(newL Vector.toList(xs) [])
+                   Vector.fromList (newL Vector.toList(xs) [])
                 end
 
              fun assignNew (x: Var.t, xs: Var.t vector, t: Type.t) =
                (* returns a vector of new statements*)
                 let
-                   val ts = Type.dest t
-                   fun assign (names, types, offset, acc) = 
+                   val ts = Vector.toList (Type.deTuple t)
+                   fun assign names types offset acc = 
                       case (names, types) of
-                         (name::ntl, type::ttl) => assign ntl ttl (offset + 1) 
-                                                      Statement.T {var = name, ty = type, exp = Select {tuple = x, offset = offset}}::acc
+                         (name::ntl, tt::ttl) =>  assign ntl ttl (offset + 1) 
+                                                  Statement.T {var = name, ty = tt, exp = Select {tuple = x, offset = offset}}::acc
                         | _ => acc
                 in
-                   Vector.fromList (assign xs ts 1 [])
+                   Vector.fromList (assign (Vector.toList xs) ts 1 [])
                 end
 
              val newArgs = forces args
