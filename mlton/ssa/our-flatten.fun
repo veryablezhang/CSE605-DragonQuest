@@ -27,8 +27,22 @@ open Exp Transfer
 fun transform (Program.T {globals, datatypes, functions, main}) =
    let
       val record = ref [] (* store newly created vars. *)
-      val _ = print("Our flatten starts\n")
+      
+      fun getE (Flatters.T {name, elements}) = elements
 
+      fun getElements(x: Var.t) = 
+                (*return the elements in a recorded tuple*)
+          let
+              val i = case (List.index (!record, (fn Flatters.T{name, ...} => (Var.equals (name, x))))) of
+                  NONE => 0 (*not gonna happen*)
+                | SOME ind => ind
+          in
+              getE (List.nth (!record, i))
+          end
+           
+          
+      val _ = print("Our flatten starts\n")
+	
       val shrink = shrinkFunction {globals = globals}
 
       (* Flatten tuples and store info*)
@@ -38,13 +52,8 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
           let
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
-             val _ = print f.layout
-            
-             fun getE (Flatters.T {name, elements}) = elements
-
-             fun getElements(x: Var.t) = 
-                (*return the elements in a recorded tuple*)
-                getE (List.nth (List.index(!record (fn Flatters.T{name, ...} => name = x)))) 
+                
+             val _ = Layout.print (Function.layout f, print)
                 
              (* fun foo (x: Var.t, t: Type.t): (Var.t * Type.t) =  *)
 
@@ -57,15 +66,15 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                                                   else ((Var.newNoname(), hd)::acc ))
                        | [] => acc
                    val flattened = 
-                   	if List.exists (!record, fn Flatters.T {name, ...} => name = #1 x) then
+                   	if List.exists (!record, fn Flatters.T {name, ...} => Var.equals (name, #1 x)) then
                       	    getElements (#1 x)
                        else
                            checkType (Vector.toList (Type.deTuple (#2 x))) []
                    val _ = 
-                      if List.exists (!record, fn Flatters.T {name, ...} => name = #1 x) then
+                      if List.exists (!record, fn Flatters.T {name, ...} => Var.equals (name, #1 x)) then
                       	    ()
                        else
-                           record:= List.append(!record Flatters.T{name = (#1 x), elements = flattened})
+                           record:= Flatters.T{name = (#1 x), elements = flattened}::(!record)
                 in
                    flattened
                 end
@@ -79,35 +88,39 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                                               else hd ::acc )
                         | [] => List.rev acc
                 in 
-                   Vector.fromList (newL Vector.toList(xs) [])
+                   Vector.fromList (newL (Vector.toList xs) [])
                 end
 
-             fun assignNew (x: Var.t, xs: Var.t vector, t: Type.t) =
-               (* returns a vector of new statements*)
+             fun assignNew (x: Var.t option, xs: Var.t vector, t: Type.t) =
+               (* returns a list of new statements*)
                 let
                    val ts = Vector.toList (Type.deTuple t)
+                   val tname = 
+                      case x of
+                         NONE => Var.newNoname()
+                       | SOME tuplename => tuplename
                    fun assign names types offset acc = 
                       case (names, types) of
                          (name::ntl, tt::ttl) =>  assign ntl ttl (offset + 1) 
-                                                  Statement.T {var = name, ty = tt, exp = Select {tuple = x, offset = offset}}::acc
+                                                  (Statement.T {var = (SOME name), ty = tt, exp = Select {tuple = tname, offset = offset}}::acc)
                         | _ => acc
-                in
-                   Vector.fromList (assign (Vector.toList xs) ts 1 [])
+                in 
+                   assign (Vector.toList xs) ts 1 []
                 end
 
              val newArgs = forces args
              
-             fun visit (Block.T {args, statements, transfer, ...}): unit -> unit =
+             fun visit (Block.T {args, statements, transfer, label}) =
                 let
                    val newA = forces args
                    val newS = 
                       Vector.map
                       (statements, fn Statement.T {var, ty, exp} =>
                        case exp of
-                          Select {tuple, offset} => Vector.new1 Select {tuple = tuple, offset = offset} (*change it later*)
-                        | Tuple args => Vector.concat [Vector.new1 Statement.T {var = var, ty = ty, exp = Tuple args}, 
-                                                       assignNew var args ty]
-                        | _ => Vector.new1 Statement.T {var = var, ty = ty, exp = exp})
+                          Select {tuple, offset} => Vector.new1 (Statement.T {var = var, ty = ty, exp = (Select {tuple = tuple, offset = offset}) }) (*change it later*)
+                        | Tuple args => Vector.fromList ((Statement.T {var = var, ty = ty, exp = Tuple args}):: 
+                                                       (assignNew (var, args, ty)))
+                        | _ => Vector.new1 (Statement.T {var = var, ty = ty, exp = exp}))
                 in
                    Block.T {label = label,
                              args = newA,
@@ -124,7 +137,8 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                                    returns = returns,
                                    start = start})
           end)
-
+      
+      val _ = print "-------------------------------2nd run"
       (*Flattening transfers*)    
       val functions =
          List.revMap
@@ -132,21 +146,22 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
           let
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
-             val _ = print f.layout
+                
+             val _ = Layout.print (Function.layout f, print)
 
              fun checkFlatten (x: Var.t) =
-                if List.exists (!record, fn Flatters.T {name, ...} => name = x) then
-                   #1 List.unzip (getElements x)
+                if List.exists (!record, fn Flatters.T {name, ...} => Var.equals (name, x)) then
+                   Vector.fromList (#1 (List.unzip (getElements x)))
                 else 
-                   [x]
+                   Vector.new1 x
              fun force (xs: Var.t vector) =
-                Vector.concat (Vector.map(xs, checkFlatten))
+                Vector.concatV (Vector.map(xs, checkFlatten))
 
-             fun visit (Block.T {args, statements, transfer, ...}): unit -> unit =
+             fun visit (Block.T {args, statements, transfer, label}) =
                 let
                    val newT =
                       case transfer of
-                         Call {args, func, return} => Call{args = force args, func = func, retrun = return} (*will the other parts passed to the new call?*)
+                         Call {args, func, return} => Call {args = force args, func = func, return = return} (*will the other parts passed to the new call?*)
                        | Goto {dst, args} => Goto {dst = dst, args = force args}
                        | _ => transfer
                 in
@@ -157,7 +172,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                 end
              val newBlocks = Vector.map (blocks,visit)
           in
-             shrink (Function.new {args = newArgs,
+             shrink (Function.new {args = args,
                                    blocks = newBlocks,
                                    mayInline = mayInline,
                                    name = name,
