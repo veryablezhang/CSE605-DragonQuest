@@ -53,8 +53,6 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
                 
-             val _ = Layout.print (Function.layout f, print)
-                
              (* fun foo (x: Var.t, t: Type.t): (Var.t * Type.t) =  *)
 
              fun flat (x: Var.t * Type.t): (Var.t * Type.t) list =    
@@ -146,8 +144,6 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
           let
              val {args, blocks, mayInline, name, raises, returns, start} =
                 Function.dest f
-                
-             val _ = Layout.print (Function.layout f, print)
 
              fun checkFlatten (x: Var.t) =
                 if List.exists (!record, fn Flatters.T {name, ...} => Var.equals (name, x)) then
@@ -180,7 +176,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                                    returns = returns,
                                    start = start})
           end)
-
+      val _ = print("Our flatten ends\n")
       val program = Program.T {datatypes = datatypes,
                                globals = globals,
                                functions = functions, 
