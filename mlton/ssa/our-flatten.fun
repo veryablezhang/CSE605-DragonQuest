@@ -103,7 +103,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                                                   (Statement.T {var = (SOME name), ty = tt, exp = Select {tuple = tname, offset = offset}}::acc)
                         | _ => acc
                 in 
-                   assign (Vector.toList xs) ts 1 []
+                   assign (Vector.toList xs) ts 0 []
                 end
 
              val newArgs = forces args
@@ -136,7 +136,7 @@ fun transform (Program.T {globals, datatypes, functions, main}) =
                                    start = start})
           end)
       
-      val _ = print "-------------------------------2nd run"
+      val _ = print "-------------------------------2nd run\n"
       (*Flattening transfers*)    
       val functions =
          List.revMap
